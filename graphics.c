@@ -3,7 +3,9 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_render.h>
 
-SDL_Texture *create_font_texture(graphics_t *graphics);
+static SDL_Texture *create_font_texture(graphics_t *graphics);
+// SDL crashes my graphics driver if the line is too long so clip clip
+int liang_barsky(float xmin, float ymin, float xmax, float ymax, float x1, float y1, float x2, float y2, float *nx1, float *ny1, float *nx2, float *ny2);
 
 int init_graphics(SDL_Window *window, graphics_t *graphics)
 {
@@ -235,13 +237,12 @@ void fill_rounded_rect(graphics_t *graphics, world_t *world, float x, float y, f
 
 void draw_line(graphics_t *graphics, world_t *world, float sx, float sy, float ex, float ey, u32 color)
 {
-    int w1, h1;
-    SDL_RenderGetLogicalSize(graphics->renderer, &w1, &h1);
+    int w, h;
+    SDL_RenderGetLogicalSize(graphics->renderer, &w, &h);
     world_to_screenf(world, sx, sy, &sx, &sy);
     world_to_screenf(world, ex, ey, &ex, &ey);
-    // manual clipping because SDL is struggling
-    if ((sx < 0 && ex < 0) || (sy < 0 && ey < 0) || (sx > w1 && ex > w1) || (sy > h1 && ey > h1))
-        return;
+    int clipped = liang_barsky(0, 0, w, h, sx, sy, ex, ey, &sx, &sy, &ex, &ey);
+    if (clipped) return;
     SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(graphics->renderer, ARGB(color));
     SDL_RenderDrawLineF(graphics->renderer, sx, sy, ex, ey);
@@ -345,4 +346,59 @@ SDL_Texture *create_font_texture(graphics_t *graphics)
     SDL_Texture *tex = create_texture(graphics, font_data, w, h, ch);
     free(font_data);
     return tex;
+}
+
+// https://en.wikipedia.org/wiki/Liang%E2%80%93Barsky_algorithm
+int liang_barsky(float xmin, float ymin, float xmax, float ymax, float x1, float y1, float x2, float y2, float *nx1, float *ny1, float *nx2, float *ny2)
+{
+    float p1 = -(x2 - x1);
+    float p2 = -p1;
+    float p3 = -(y2 - y1);
+    float p4 = -p3;
+
+    float q1 = x1 - xmin;
+    float q2 = xmax - x1;
+    float q3 = y1 - ymin;
+    float q4 = ymax - y1;
+
+    float rn1 = 0, rn2 = 1;
+
+    if ((p1 == 0 && q1 < 0) || (p2 == 0 && q2 < 0) || (p3 == 0 && q3 < 0) || (p4 == 0 && q4 < 0))
+        return 1;
+
+    if (p1 != 0)
+    {
+        float r1 = q1 / p1;
+        float r2 = q2 / p2;
+        if (p1 > 0)
+        {
+            float rt = r1;
+            r1 = r2;
+            r2 = rt;
+        }
+        rn1 = rn1 < r1 ? r1 : rn1;
+        rn2 = rn2 > r2 ? r2 : rn2;
+    }
+    if (p3 != 0)
+    {
+        float r3 = q3 / p3;
+        float r4 = q4 / p4;
+        if (p3 > 0)
+        {
+            float rt = r3;
+            r3 = r4;
+            r4 = rt;
+        }
+        rn1 = rn1 < r3 ? r3 : rn1;
+        rn2 = rn2 > r4 ? r4 : rn2;
+    }
+
+    if (rn1 > rn2) return 1;
+
+    *nx1 = x1 + p2 * rn1;
+    *ny1 = y1 + p4 * rn1;
+    *nx2 = x1 + p2 * rn2;
+    *ny2 = y1 + p4 * rn2;
+
+    return 0;
 }
