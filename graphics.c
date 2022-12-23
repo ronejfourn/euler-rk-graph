@@ -235,8 +235,13 @@ void fill_rounded_rect(graphics_t *graphics, world_t *world, float x, float y, f
 
 void draw_line(graphics_t *graphics, world_t *world, float sx, float sy, float ex, float ey, u32 color)
 {
+    int w1, h1;
+    SDL_RenderGetLogicalSize(graphics->renderer, &w1, &h1);
     world_to_screenf(world, sx, sy, &sx, &sy);
     world_to_screenf(world, ex, ey, &ex, &ey);
+    // manual clipping because SDL is struggling
+    if ((sx < 0 && ex < 0) || (sy < 0 && ey < 0) || (sx > w1 && ex > w1) || (sy > h1 && ey > h1))
+        return;
     SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(graphics->renderer, ARGB(color));
     SDL_RenderDrawLineF(graphics->renderer, sx, sy, ex, ey);
