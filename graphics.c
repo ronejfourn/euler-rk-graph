@@ -55,7 +55,6 @@ void sdraw_text(graphics_t *graphics, i32 x, i32 y, const string_t *text, u32 co
 {
     SDL_Rect srect = {0, 0, graphics->font.gw, graphics->font.gh};
     SDL_Rect drect = {x, y, graphics->font.gw, graphics->font.gh};
-    SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_BLEND);
     SDL_SetTextureColorMod(graphics->font.texture, RGB(color));
     for (u32 i = 0; i < text->length; i ++)
     {
@@ -66,25 +65,20 @@ void sdraw_text(graphics_t *graphics, i32 x, i32 y, const string_t *text, u32 co
         SDL_RenderCopy(graphics->renderer, graphics->font.texture, &srect, &drect);
         drect.x += drect.w;
     }
-    SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_NONE);
 }
 
 void sdraw_rect(graphics_t *graphics, i32 x, i32 y, i32 w, i32 h, u32 color)
 {
     SDL_Rect rect = {x, y, w, h};
-    SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(graphics->renderer, ARGB(color));
     SDL_RenderDrawRect(graphics->renderer, &rect);
-    SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_NONE);
 }
 
 void sfill_rect(graphics_t *graphics, i32 x, i32 y, i32 w, i32 h, u32 color)
 {
     SDL_Rect rect = {x, y, w, h};
-    SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(graphics->renderer, ARGB(color));
     SDL_RenderFillRect(graphics->renderer, &rect);
-    SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_NONE);
 }
 
 void sdraw_rounded_rect(graphics_t *graphics, i32 x, i32 y, i32 w, i32 h, i32 r, u32 color)
@@ -143,10 +137,8 @@ void sfill_rounded_rect(graphics_t *graphics, i32 x, i32 y, i32 w, i32 h, i32 r,
 
 void sdraw_line(graphics_t *graphics, i32 sx, i32 sy, i32 ex, i32 ey, u32 color)
 {
-    SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(graphics->renderer, ARGB(color));
     SDL_RenderDrawLine(graphics->renderer, sx, sy, ex, ey);
-    SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_NONE);
 }
 
 //
@@ -159,10 +151,8 @@ void draw_rect(graphics_t *graphics, world_t *world, float x, float y, float w, 
     world_to_screenf(world, x, y, &frect.x, &frect.y);
     frect.w = w * world->scale;
     frect.h = h * world->scale;
-    SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(graphics->renderer, ARGB(color));
     SDL_RenderDrawRectF(graphics->renderer, &frect);
-    SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_NONE);
 }
 
 void fill_rect(graphics_t *graphics, world_t *world, float x, float y, float w, float h, u32 color)
@@ -171,10 +161,9 @@ void fill_rect(graphics_t *graphics, world_t *world, float x, float y, float w, 
     world_to_screenf(world, x, y, &frect.x, &frect.y);
     frect.w = w * world->scale;
     frect.h = h * world->scale;
-    SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(graphics->renderer, ARGB(color));
     SDL_RenderFillRectF(graphics->renderer, &frect);
-    SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_NONE);
+
 }
 
 void draw_rounded_rect(graphics_t *graphics, world_t *world, float x, float y, float w, float h, float r, u32 color)
@@ -243,10 +232,8 @@ void draw_line(graphics_t *graphics, world_t *world, float sx, float sy, float e
     world_to_screenf(world, ex, ey, &ex, &ey);
     int clipped = liang_barsky(0, 0, w, h, sx, sy, ex, ey, &sx, &sy, &ex, &ey);
     if (clipped) return;
-    SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(graphics->renderer, ARGB(color));
     SDL_RenderDrawLineF(graphics->renderer, sx, sy, ex, ey);
-    SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_NONE);
 }
 
 void draw_text(graphics_t *graphics, world_t *world, float x, float y, float scale, const string_t *text, u32 color)
@@ -256,8 +243,6 @@ void draw_text(graphics_t *graphics, world_t *world, float x, float y, float sca
     SDL_FRect drect = {x, y, graphics->font.gw, graphics->font.gh};
     drect.w *= world->scale * scale;
     drect.h *= world->scale * scale;
-
-    SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_BLEND);
     SDL_SetTextureColorMod(graphics->font.texture, RGB(color));
     for (u32 i = 0; i < text->length; i ++)
     {
@@ -268,7 +253,6 @@ void draw_text(graphics_t *graphics, world_t *world, float x, float y, float sca
         SDL_RenderCopyF(graphics->renderer, graphics->font.texture, &srect, &drect);
         drect.x += drect.w;
     }
-    SDL_SetRenderDrawBlendMode(graphics->renderer, SDL_BLENDMODE_NONE);
 }
 
 #undef ARGB
