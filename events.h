@@ -34,7 +34,7 @@ events_t;
 int init_events    (events_t *events);
 void handle_events (const SDL_Event *ev, events_t *app);
 void advance_events(events_t *events);
-void handle_zoom_and_pan(world_t *world, events_t *events);
+int handle_zoom_and_pan(world_t *world, events_t *events);
 
 static inline u8 key_held (events_t *events, int key)
 { return  events->ckeys[key] &&  events->pkeys[key]; }

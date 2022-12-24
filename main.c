@@ -91,6 +91,8 @@ int main()
     int run = 0;
     int draw_plot = 0;
 
+    struct { float top, bottom, left, right; } world_bounds;
+
 #ifdef PF_WINDOWS
     SetProcessDPIAware();
 #endif
@@ -139,6 +141,8 @@ int main()
     input_dst_rect.h = input_src_rect.h;
 
     redraw_static_texture(&graphics, static_texture, &geometry, &prompt, &prompt_rect);
+    screen_to_worldf(&world, 0, 0, &world_bounds.left, &world_bounds.top);
+    screen_to_worldf(&world, geometry.x, geometry.y, &world_bounds.right, &world_bounds.bottom);
 
     run = 1;
     while (run)
@@ -173,16 +177,24 @@ int main()
                 static_tex_rect.w = geometry.x;
                 static_tex_rect.h = geometry.y;
                 redraw_static_texture(&graphics, static_texture, &geometry, &prompt, &prompt_rect);
+                screen_to_worldf(&world, 0, 0, &world_bounds.left, &world_bounds.top);
+                screen_to_worldf(&world, geometry.x, geometry.y, &world_bounds.right, &world_bounds.bottom);
             }
         }
 
-        handle_zoom_and_pan(&world, &events);
+        if (handle_zoom_and_pan(&world, &events))
+        {
+            screen_to_worldf(&world, 0, 0, &world_bounds.left, &world_bounds.top);
+            screen_to_worldf(&world, geometry.x, geometry.y, &world_bounds.right, &world_bounds.bottom);
+        }
 
         if (key_pressed(&events, SDL_SCANCODE_R) && (events.mods & MOD_CTRL))
         {
             world.scale = 100.0f;
             world.offset.x = (-geometry.x / 2.0f) / world.scale;
             world.offset.y = (-geometry.y / 2.0f) / world.scale;
+            screen_to_worldf(&world, 0, 0, &world_bounds.left, &world_bounds.top);
+            screen_to_worldf(&world, geometry.x, geometry.y, &world_bounds.right, &world_bounds.bottom);
         }
 
         if (key_pressed(&events, SDL_SCANCODE_RETURN))
@@ -241,8 +253,8 @@ int main()
         SDL_SetRenderDrawColor(renderer, 0x28, 0x28, 0x28, 0);
         SDL_RenderClear(renderer);
 
-        draw_line(&graphics, &world, -1000, 0, 1000, 0, WHITE);
-        draw_line(&graphics, &world, 0, -1000, 0, 1000, WHITE);
+        draw_line(&graphics, &world, world_bounds.left, 0, world_bounds.right, 0, WHITE);
+        draw_line(&graphics, &world, 0, world_bounds.top, 0, world_bounds.bottom, WHITE);
 
         if (draw_plot)
         {
