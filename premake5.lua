@@ -25,6 +25,7 @@ project "euler-rk-graph"
     links { "SDL2", "SDL2main", "m" }
 
   filter "system:windows"
+    defines "PF_WINDOWS"
     includedirs { "./SDL2-2.26.1/" }
     libdirs { "./SDL2-2.26.1/lib/x64" }
     links { "SDL2.lib", "SDL2main.lib" }

@@ -3,6 +3,11 @@
 #include "events.h"
 #include "mexp.h"
 
+#ifdef PF_WINDOWS
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#endif
+
 #define MAX_LENGTH 256
 #define DEFAULT_WINDOW_WIDTH 1280
 #define DEFAULT_WINDOW_HEIGHT 720
@@ -81,6 +86,10 @@ int main()
 
     int run = 0;
     int draw_plot = 0;
+
+#ifdef PF_WINDOWS
+    SetProcessDPIAware();
+#endif
 
     if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO | SDL_INIT_EVENTS))
         return 1;
