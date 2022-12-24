@@ -1,7 +1,7 @@
 #pragma once
-#include <stdio.h>
 #include <stdint.h>
-#include <stdlib.h>
+
+#define MEXP_ERROR_LENGTH 256
 
 typedef struct mexp_token_t   mexp_token_t;
 typedef struct mexp_node_t    mexp_node_t;
@@ -20,6 +20,7 @@ void mexp_free_tree(mexp_tree_t *tree);
 void mexp_print_tree(const mexp_tree_t *tree);
 double mexp_eval_tree(mexp_tree_t *tree, double *v);
 int mexp_add_variable(mexp_parser_t *parser, char var);
+const char *mexp_get_error(mexp_parser_t *parser);
 
 struct mexp_token_t
 {
@@ -34,8 +35,8 @@ struct mexp_token_t
         char character;
         char string[8];
         double number;
-        const char *error;
     };
+    char error[MEXP_ERROR_LENGTH + 1];
 };
 
 struct mexp_node_t

@@ -1,6 +1,8 @@
 #include "mexp.h"
-#include <stdlib.h>
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 static void mexp__advance_whitespace(mexp_parser_t *parser);
 static void mexp__parser_get_next(mexp_parser_t *parser);
@@ -67,14 +69,23 @@ int mexp_init_parser(mexp_parser_t *parser)
     parser->stack.count = 0;
     parser->stack.buf = (mexp_state_t*)malloc(sizeof(*parser->stack.buf) * 8);
     if (!parser->stack.buf)
-    {
-        fprintf(stderr, "out of memory\n");
         return 0;
-    }
 
     parser->var_max   = 8;
     parser->var_count = 0;
     parser->variables = (char *)malloc(parser->var_max);
+    if (!parser->variables)
+        return 0;
+
+    parser->start = NULL;
+    parser->last = NULL;
+    parser->at = NULL;
+
+    parser->token.type = TOKEN_NONE;
+    parser->token.contents.data   = NULL;
+    parser->token.contents.length = 0;
+    memset(parser->token.error, 0, sizeof(parser->token.error));
+
     return 1;
 }
 
@@ -84,12 +95,16 @@ int mexp_init_tree(mexp_tree_t *tree)
     tree->pool.count = 0;
     tree->pool.pool = (mexp_node_t*)malloc(sizeof(*tree->pool.pool) * 16);
     if (!tree->pool.pool)
-    {
-        fprintf(stderr, "out of memory\n");
         return 0;
-    }
     tree->pool.cap  = 16;
     return 1;
+}
+
+const char *mexp_get_error(mexp_parser_t *parser)
+{
+    if (parser->token.type == TOKEN_ERROR)
+        return parser->token.error;
+    return "(no error)";
 }
 
 int mexp_generate_tree(mexp_tree_t *tree, mexp_parser_t *parser, const char *expr, int32_t length)
@@ -102,6 +117,8 @@ int mexp_generate_tree(mexp_tree_t *tree, mexp_parser_t *parser, const char *exp
     parser->last  = expr + length;
     parser->token.type = TOKEN_NONE;
 
+    mexp_token_t *token = &parser->token;
+
     mexp_node_t node;
     mexp_state_t state;
     state.head = -1;
@@ -112,55 +129,63 @@ int mexp_generate_tree(mexp_tree_t *tree, mexp_parser_t *parser, const char *exp
     const mexp_state_t reset_state = {-1, -1, -1, 0, 0};
     uint32_t expected = TOKEN_ANY & (~(TOKEN_CBRACKET | TOKEN_COMMA));
 
-    while (parser->token.type != TOKEN_END)
+    while (token->type != TOKEN_END)
     {
         mexp__parser_get_next(parser);
-        if (parser->token.type == TOKEN_ERROR)
+        if (token->type == TOKEN_ERROR)
+            return 0;
+
+        if (!(token->type & expected))
         {
-            fprintf(stderr, "%s\n", parser->token.error);
+            snprintf(token->error, MEXP_ERROR_LENGTH, "unexpected token '%.*s'", token->contents.length, token->contents.data);
+            token->type = TOKEN_ERROR;
             return 0;
         }
 
-        if (!(parser->token.type & expected))
+        if (token->type == TOKEN_CHAR)
         {
-            fprintf(stderr, "unexpected token\n");
-            return 0;
-        }
-
-        if (parser->token.type == TOKEN_CHAR)
-        {
-            int index = mexp__is_variable(parser, parser->token.character);
+            int index = mexp__is_variable(parser, token->character);
             if (index == -1)
             {
-                fprintf(stderr, "unknown variable '%c'\n", parser->token.character);
+                snprintf(token->error, MEXP_ERROR_LENGTH, "unknown variable '%c'", token->character);
+                token->type = TOKEN_ERROR;
                 return 0;
             }
             node.type = NODE_VARIABLE;
-            node.var.name  = parser->token.character;
+            node.var.name  = token->character;
             node.var.index = index;
             if (!mexp__push_node(tree, node))
+            {
+                snprintf(token->error, MEXP_ERROR_LENGTH, "out of memory");
+                token->type = TOKEN_ERROR;
                 return 0;
+            }
             state.last_operand = tree->pool.count - 1;
             expected = TOKEN_OPERATOR | TOKEN_END | TOKEN_CBRACKET | TOKEN_COMMA;
         }
 
-        if (parser->token.type == TOKEN_NUMBER)
+        if (token->type == TOKEN_NUMBER)
         {
             node.type  = NODE_NUMBER;
-            node.value = parser->token.number;
+            node.value = token->number;
             if (!mexp__push_node(tree, node))
+            {
+                snprintf(token->error, MEXP_ERROR_LENGTH, "out of memory");
+                token->type = TOKEN_ERROR;
                 return 0;
+            }
             state.last_operand = tree->pool.count - 1;
             expected = TOKEN_OPERATOR | TOKEN_END | TOKEN_CBRACKET | TOKEN_COMMA;
         }
 
-        if (parser->token.type == TOKEN_STRING)
+        if (token->type == TOKEN_STRING)
         {
-            int index = mexp__match_builtin(parser->token.string);
+            int index = mexp__match_builtin(token->string);
             // TODO: user defined functions
             if (index == -1)
             {
-                fprintf(stderr, "unknown string '%.8s'\n", parser->token.string);
+                snprintf(token->error, MEXP_ERROR_LENGTH, "unknown string '%.8s'", token->string);
+                token->type = TOKEN_ERROR;
                 return 0;
             }
             node.type = NODE_FUNCTION;
@@ -169,24 +194,38 @@ int mexp_generate_tree(mexp_tree_t *tree, mexp_parser_t *parser, const char *exp
             for (int i = 0; i < sizeof(node.func.name); i ++)
                 node.func.name[i] = mexp__builtin_funcs[index].name[i];
             if (!mexp__push_node(tree, node))
+            {
+                snprintf(token->error, MEXP_ERROR_LENGTH, "out of memory");
+                token->type = TOKEN_ERROR;
                 return 0;
+            }
             state.last_operand = tree->pool.count - 1;
             for (int i = 0; i < node.func.nargs; i ++)
+            {
                 if (!mexp__push_node(tree, node))
+                {
+                    snprintf(token->error, MEXP_ERROR_LENGTH, "out of memory");
+                    token->type = TOKEN_ERROR;
                     return 0;
+                }
+            }
             state.function_call = 1;
             state.function_arg_count = 0;
             expected = TOKEN_OBRACKET;
         }
 
-        if (parser->token.type == TOKEN_OPERATOR)
+        if (token->type == TOKEN_OPERATOR)
         {
             node.type = NODE_OPERATOR;
-            node.oper.type  = parser->token.character;
+            node.oper.type  = token->character;
             node.oper.left  = -1;
             node.oper.right = -1;
             if (!mexp__push_node(tree, node))
+            {
+                snprintf(token->error, MEXP_ERROR_LENGTH, "out of memory");
+                token->type = TOKEN_ERROR;
                 return 0;
+            }
             state.last_operator = tree->pool.count - 1;
             mexp_node_t *self = &tree->pool.pool[state.last_operator];
 
@@ -201,13 +240,18 @@ int mexp_generate_tree(mexp_tree_t *tree, mexp_parser_t *parser, const char *exp
                 {
                     mexp_node_t dummy = {NODE_NUMBER, 0};
                     if (!mexp__push_node(tree, dummy))
+                    {
+                        snprintf(token->error, MEXP_ERROR_LENGTH, "out of memory");
+                        token->type = TOKEN_ERROR;
                         return 0;
+                    }
                     self->oper.left = tree->pool.count - 1;
                     state.head = state.last_operator;
                 }
                 else
                 {
-                    fprintf(stderr, "\'%c\' cant be used as unary operator", node.oper.type);
+                    snprintf(token->error, MEXP_ERROR_LENGTH, "\'%c\' cant be used as unary operator", node.oper.type);
+                    token->type = TOKEN_ERROR;
                     return 0;
                 }
             }
@@ -248,12 +292,13 @@ int mexp_generate_tree(mexp_tree_t *tree, mexp_parser_t *parser, const char *exp
             expected = TOKEN_CHAR | TOKEN_NUMBER | TOKEN_OBRACKET | TOKEN_STRING;
         }
 
-        if (parser->token.type == TOKEN_COMMA)
+        if (token->type == TOKEN_COMMA)
         {
             mexp_state_t temp = {-1, -1, -1, 0, 0};
             if (!mexp__pop_state(parser, &temp) || !temp.function_call)
             {
-                fprintf(stderr, "unexpected ','\n");
+                snprintf(token->error, MEXP_ERROR_LENGTH, "unexpected ','");
+                token->type = TOKEN_ERROR;
                 return 0;
             }
             if (state.head != -1)
@@ -266,25 +311,34 @@ int mexp_generate_tree(mexp_tree_t *tree, mexp_parser_t *parser, const char *exp
             dst->type  = NODE_DUMMY;
             dst->index = state.head;
             if (!mexp__push_state(parser, &temp))
+            {
+                snprintf(token->error, MEXP_ERROR_LENGTH, "out of memory");
+                token->type = TOKEN_ERROR;
                 return 0;
+            }
             state = reset_state;
             expected = TOKEN_OBRACKET | TOKEN_NUMBER | TOKEN_CHAR | TOKEN_STRING | TOKEN_OPERATOR;
         }
 
-        if (parser->token.type == TOKEN_OBRACKET)
+        if (token->type == TOKEN_OBRACKET)
         {
             if (!mexp__push_state(parser, &state))
+            {
+                snprintf(token->error, MEXP_ERROR_LENGTH, "out of memory");
+                token->type = TOKEN_ERROR;
                 return 0;
+            }
             state = reset_state;
             expected = TOKEN_ANY & ~TOKEN_COMMA;
         }
 
-        if (parser->token.type == TOKEN_CBRACKET)
+        if (token->type == TOKEN_CBRACKET)
         {
             mexp_state_t temp = {-1, -1, -1, 0, 0};
             if (!mexp__pop_state(parser, &temp))
             {
-                fprintf(stderr, "unexpected ')'\n");
+                snprintf(token->error, MEXP_ERROR_LENGTH, "unexpected ')'");
+                token->type = TOKEN_ERROR;
                 return 0;
             }
             if (state.head != -1)
@@ -304,10 +358,12 @@ int mexp_generate_tree(mexp_tree_t *tree, mexp_parser_t *parser, const char *exp
                 }
                 if (temp.function_arg_count != tree->pool.pool[temp.last_operand].func.nargs)
                 {
-                    fprintf(stderr, "function '%.8s' expects %d arguments but got %d\n",
+                    snprintf(token->error, MEXP_ERROR_LENGTH,
+                            "function '%.8s' expects %d arguments but got %d",
                             tree->pool.pool[temp.last_operand].func.name,
                             tree->pool.pool[temp.last_operand].func.nargs,
                             temp.function_arg_count);
+                    token->type = TOKEN_ERROR;
                     return 0;
                 }
                 temp.function_call = 0;
@@ -317,7 +373,8 @@ int mexp_generate_tree(mexp_tree_t *tree, mexp_parser_t *parser, const char *exp
             {
                 if (state.head == -1)
                 {
-                    fprintf(stderr, "() is undefined\n");
+                    snprintf(token->error, MEXP_ERROR_LENGTH, "() is undefined");
+                    token->type = TOKEN_ERROR;
                     return 0;
                 }
                 temp.last_operand = state.head;
@@ -331,7 +388,8 @@ int mexp_generate_tree(mexp_tree_t *tree, mexp_parser_t *parser, const char *exp
     mexp_state_t temp;
     if (mexp__pop_state(parser, &temp))
     {
-        fprintf(stderr, "unterminated '('\n");
+        snprintf(token->error, MEXP_ERROR_LENGTH, "unterminated '('");
+        token->type = TOKEN_ERROR;
         return 0;
     }
 
@@ -344,7 +402,8 @@ int mexp_generate_tree(mexp_tree_t *tree, mexp_parser_t *parser, const char *exp
 
     if (tree->head == -1)
     {
-        fprintf(stderr, "empty expression\n");
+        snprintf(token->error, MEXP_ERROR_LENGTH, "empty expression");
+        token->type = TOKEN_ERROR;
         return 0;
     }
 
@@ -377,20 +436,14 @@ void mexp_free_tree(mexp_tree_t *tree)
 void mexp_print_tree(const mexp_tree_t *tree)
 {
     if (!tree || tree->head == -1)
-    {
-        fprintf(stderr, "invalid tree\n");
         return;
-    }
     mexp__print_node(tree, tree->head, 0);
 }
 
 double mexp_eval_tree(mexp_tree_t *tree, double *v)
 {
     if (!tree || tree->head == -1)
-    {
-        fprintf(stderr, "invalid tree\n");
         return 0;
-    }
 
     for (int i = 0; i < tree->pool.count; i++)
     {
@@ -434,52 +487,53 @@ static void mexp__parser_get_next(mexp_parser_t *parser)
 #define ISNUM(ch) ((ch) >= '0' && (ch) <= '9')
 #define ISALPHA(ch) (((ch) >= 'a' && (ch) <= 'z') || ((ch) >= 'A' && (ch) <= 'Z'))
 #define ISALNUM(ch) (ISNUM(ch) || ISALPHA(ch))
+    mexp_token_t *token = &parser->token;
     mexp__advance_whitespace(parser);
     if (parser->at >= parser->last)
     {
-        parser->token.type = TOKEN_END;
-        parser->token.character = 0;
+        token->type = TOKEN_END;
+        token->character = 0;
         return;
     }
 
-    parser->token.contents.data   = parser->at;
-    parser->token.contents.length = 0;
+    token->contents.data   = parser->at;
+    token->contents.length = 0;
     char a = *parser->at;
     char b = (parser->at + 1 >= parser->last) ? 0 : *(parser->at + 1);
 
     if (ISOP(a))
     {
-        parser->token.type = TOKEN_OPERATOR;
-        parser->token.character = a;
+        token->type = TOKEN_OPERATOR;
+        token->character = a;
         parser->at ++;
-        parser->token.contents.length = 1;
+        token->contents.length = 1;
         return;
     }
 
     if (a == '(')
     {
-        parser->token.type = TOKEN_OBRACKET;
-        parser->token.character = a;
+        token->type = TOKEN_OBRACKET;
+        token->character = a;
         parser->at ++;
-        parser->token.contents.length = 1;
+        token->contents.length = 1;
         return;
     }
 
     if (a == ')')
     {
-        parser->token.type = TOKEN_CBRACKET;
-        parser->token.character = a;
+        token->type = TOKEN_CBRACKET;
+        token->character = a;
         parser->at ++;
-        parser->token.contents.length = 1;
+        token->contents.length = 1;
         return;
     }
 
     if (a == ',')
     {
-        parser->token.type = TOKEN_COMMA;
-        parser->token.character = a;
+        token->type = TOKEN_COMMA;
+        token->character = a;
         parser->at ++;
-        parser->token.contents.length = 1;
+        token->contents.length = 1;
         return;
     }
 
@@ -487,48 +541,48 @@ static void mexp__parser_get_next(mexp_parser_t *parser)
     {
         if (!ISALPHA(b))
         {
-            parser->token.type = TOKEN_CHAR;
-            parser->token.character = a;
+            token->type = TOKEN_CHAR;
+            token->character = a;
             parser->at ++;
         }
         else
         {
-            parser->token.type = TOKEN_STRING;
-            for (size_t i = 0; i < sizeof(parser->token.string); i++)
-                parser->token.string[i] = 0;
+            token->type = TOKEN_STRING;
+            for (size_t i = 0; i < sizeof(token->string); i++)
+                token->string[i] = 0;
             uint32_t i = 0;
             while(ISALNUM(*parser->at) && parser->at < parser->last)
             {
-                if (i >= sizeof(parser->token.string))
+                if (i >= sizeof(token->string))
                 {
-                    parser->token.type  = TOKEN_ERROR;
-                    parser->token.error = "string overflow";
-                    parser->token.contents.length = parser->at - parser->token.contents.data;
+                    token->type = TOKEN_ERROR;
+                    token->contents.length = parser->at - token->contents.data;
+                    snprintf(token->error, MEXP_ERROR_LENGTH, "string overflow '%.*s...'", token->contents.length, token->contents.data);
                     return;
                 }
-                parser->token.string[i++] = *parser->at;
+                token->string[i++] = *parser->at;
                 parser->at ++;
             }
         }
-        parser->token.contents.length = parser->at - parser->token.contents.data;
+        token->contents.length = parser->at - token->contents.data;
         return;
     }
 
     if (ISNUM(a))
     {
-        parser->token.type = TOKEN_NUMBER;
-        parser->token.number = 0;
+        token->type = TOKEN_NUMBER;
+        token->number = 0;
 
         while(ISNUM(*parser->at) && parser->at < parser->last)
         {
-            parser->token.number *= 10;
-            parser->token.number += *parser->at - '0';
+            token->number *= 10;
+            token->number += *parser->at - '0';
             parser->at ++;
         }
 
         if (*parser->at != '.')
         {
-            parser->token.contents.length = parser->at - parser->token.contents.data;
+            token->contents.length = parser->at - token->contents.data;
             return;
         }
         parser->at ++;
@@ -537,16 +591,16 @@ static void mexp__parser_get_next(mexp_parser_t *parser)
         while(ISNUM(*parser->at) && parser->at < parser->last)
         {
             div *= 10;
-            parser->token.number += (*parser->at - '0') / div;
+            token->number += (*parser->at - '0') / div;
             parser->at ++;
         }
-        parser->token.contents.length = parser->at - parser->token.contents.data;
+        token->contents.length = parser->at - token->contents.data;
         return;
     }
 
-    parser->token.type  = TOKEN_ERROR;
-    parser->token.error = "bad character";
-    parser->token.contents.length = parser->at - parser->token.contents.data;
+    token->type = TOKEN_ERROR;
+    snprintf(token->error, MEXP_ERROR_LENGTH, "bad character '%c'", a);
+    token->contents.length = parser->at - token->contents.data;
 #undef ISALNUM
 #undef ISALPHA
 #undef ISNUM
@@ -572,10 +626,7 @@ static int mexp__push_node(mexp_tree_t *tree, const mexp_node_t node)
 
     node_pool->pool = (mexp_node_t*)realloc(node_pool->pool, node_pool->cap * 2 * sizeof(*node_pool->pool));
     if (!node_pool->pool)
-    {
-        fprintf(stderr, "failed to realloc node pool\n");
         return 0;
-    }
     node_pool->cap *= 2;
     node_pool->pool[node_pool->count++] = node;
     return 1;
@@ -592,10 +643,7 @@ static int mexp__push_state(mexp_parser_t *parser, const mexp_state_t *state)
 
     stack->buf = (mexp_state_t*)realloc(stack->buf, stack->cap * 2 * sizeof(*stack->buf));
     if (!stack->buf)
-    {
-        fprintf(stderr, "failed to realloc stack\n");
         return 0;
-    }
     stack->cap *= 2;
     stack->buf[stack->count++] = *state;
     return 1;

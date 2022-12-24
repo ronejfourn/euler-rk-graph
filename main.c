@@ -11,10 +11,14 @@
 #define MAX_LENGTH 256
 #define DEFAULT_WINDOW_WIDTH 1280
 #define DEFAULT_WINDOW_HEIGHT 720
-#define WHITE 0xffd4be98
-static const u32 eul_color = 0xffea6962;
-static const u32 rk2_color = 0xffa9b665;
-static const u32 rk4_color = 0xff7daea3;
+#define WHITE  0xffd4be98
+#define RED    0xffea6962
+#define GREEN  0xffa9b665
+#define YELLOW 0xffd8a657
+#define BLUE   0xff7daea3
+static const u32 eul_color = BLUE;
+static const u32 rk2_color = GREEN;
+static const u32 rk4_color = YELLOW;
 
 static void redraw_static_texture(graphics_t *graphics, SDL_Texture *static_texture, vec2i *geometry, const string_t *prompt, const rect_t *prompt_rect);
 
@@ -184,6 +188,7 @@ int main()
         if (key_pressed(&events, SDL_SCANCODE_RETURN))
         {
             draw_plot = mexp_generate_tree(&tree, &parser, input_text.data, input_text.length);
+            redraw_static_texture(&graphics, static_texture, &geometry, &prompt, &prompt_rect);
             if (draw_plot)
             {
                 double x = x0, yeul = y0, yrk2 = y0, yrk4 = y0;
@@ -201,7 +206,17 @@ int main()
                     yrk4 = rk4(x, yrk4, h);
                     x += h;
                 }
-                draw_plot = 1;
+            }
+            else
+            {
+                string_t error;
+                error.data   = mexp_get_error(&parser);
+                error.length = strlen(error.data);
+                SDL_SetRenderTarget(graphics.renderer, static_texture);
+                SDL_SetRenderDrawBlendMode(graphics.renderer, SDL_BLENDMODE_BLEND);
+                sdraw_text(&graphics, prompt_rect.x, prompt_rect.y + prompt_rect.h, &error, RED);
+                SDL_SetRenderDrawBlendMode(graphics.renderer, SDL_BLENDMODE_NONE);
+                SDL_SetRenderTarget(graphics.renderer, NULL);
             }
         }
 
