@@ -47,7 +47,7 @@ int main()
 {
     const double h = 0.01;
     const double x0 = 0, y0 = 1, x1 = 10;
-    const long pt_count = (long)((x1 - x0) / h);
+    const size_t pt_count = (size_t)((x1 - x0) / h);
 
     vec2i geometry = {DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT};
     world_t world;
@@ -70,7 +70,14 @@ int main()
 
     mexp_parser_t parser;
     mexp_tree_t tree;
-    vec2d eul_pts[pt_count], rk2_pts[pt_count], rk4_pts[pt_count];
+
+    // apparently const is not constant expression
+    // why windows why ;-;
+    // vec2d eul_pts[pt_count], rk2_pts[pt_count], rk4_pts[pt_count];
+
+    vec2d* eul_pts = calloc(pt_count, sizeof(vec2d));
+    vec2d* rk2_pts = calloc(pt_count, sizeof(vec2d));
+    vec2d* rk4_pts = calloc(pt_count, sizeof(vec2d));
 
     int run = 0;
     int draw_plot = 0;
@@ -78,7 +85,7 @@ int main()
     if (SDL_Init(SDL_INIT_TIMER | SDL_INIT_VIDEO | SDL_INIT_EVENTS))
         return 1;
 
-    window = SDL_CreateWindow("plot", 0, 0, geometry.x, geometry.y, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+    window = SDL_CreateWindow("plot", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, geometry.x, geometry.y, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if (!window) return 1;
     if (!init_graphics(window, &graphics) || !init_events(&events)) return 1;
     if (!mexp_init_parser(&parser)) return 1;
@@ -239,6 +246,10 @@ int main()
         u32 diff = SDL_GetTicks() - begin;
         if (diff < delay) SDL_Delay(delay - diff);
     }
+
+    free(eul_pts);
+    free(rk2_pts);
+    free(rk4_pts);
 
     SDL_DestroyTexture(static_texture);
     SDL_DestroyTexture(input_texture);
