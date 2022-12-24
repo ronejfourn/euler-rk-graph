@@ -62,3 +62,16 @@ void screen_to_worldf(const world_t *w, float sx, float sy, float *wx, float *wy
     *wx = sx / w->scale + w->offset.x;
     *wy = sy / w->scale + w->offset.y;
 }
+
+void world_to_screend(const world_t *w, double wx, double wy, double *sx, double *sy)
+{
+    *sx = (wx - w->offset.x) * w->scale;
+    *sy = (wy - w->offset.y) * w->scale;
+}
+
+void screen_to_worldd(const world_t *w, double sx, double sy, double *wx, double *wy)
+{
+    *wx = sx / w->scale + w->offset.x;
+    *wy = sy / w->scale + w->offset.y;
+}
+

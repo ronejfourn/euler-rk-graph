@@ -26,7 +26,7 @@ typedef struct
     u8 pbtns[3];
     u8 mods;
     vec2i cursor_screen;
-    vec2f cursor_world;
+    vec2d cursor_world;
     i8 wheel;
 }
 events_t;

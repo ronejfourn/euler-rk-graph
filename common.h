@@ -21,15 +21,18 @@ typedef struct {i32 x, y;} vec2i;
 typedef struct {float x, y;} vec2f;
 #define vec2f_fmt "%f, %f"
 #define vec2f_arg(v) (v).x, (v).y
+typedef struct {double x, y;} vec2d;
+#define vec2d_fmt "%lf, %lf"
+#define vec2d_arg(v) (v).x, (v).y
 typedef struct {const char *data; u32 length;} string_t;
 #define string_fmt "%.*s"
 #define string_arg(s) (s).length, (s).data
 
 typedef struct world_t
 {
-    vec2f offset;
+    vec2d offset;
     vec2i pan;
-    float scale;
+    double scale;
 }
 world_t;
 
@@ -42,3 +45,5 @@ void world_to_screeni(const world_t *w, int wx, int wy, int *sx, int *sy);
 void screen_to_worldi(const world_t *w, int sx, int sy, int *wx, int *wy);
 void world_to_screenf(const world_t *w, float wx, float wy, float *sx, float *sy);
 void screen_to_worldf(const world_t *w, float sx, float sy, float *wx, float *wy);
+void world_to_screend(const world_t *w, double wx, double wy, double *sx, double *sy);
+void screen_to_worldd(const world_t *w, double sx, double sy, double *wx, double *wy);

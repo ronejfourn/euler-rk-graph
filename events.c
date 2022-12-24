@@ -75,13 +75,13 @@ void handle_zoom_and_pan(world_t *world, events_t *events)
         world->pan = events->cursor_screen;
     }
 
-    vec2f before_zoom, after_zoom;
-    screen_to_worldf(world, events->cursor_screen.x, events->cursor_screen.y, &before_zoom.x, &before_zoom.y);
+    vec2d before_zoom, after_zoom;
+    screen_to_worldd(world, events->cursor_screen.x, events->cursor_screen.y, &before_zoom.x, &before_zoom.y);
     if (events->wheel > 0) world->scale *= 1.1f;
     if (events->wheel < 0) world->scale *= 0.9f;
-    screen_to_worldf(world, events->cursor_screen.x, events->cursor_screen.y, &after_zoom.x, &after_zoom.y);
+    screen_to_worldd(world, events->cursor_screen.x, events->cursor_screen.y, &after_zoom.x, &after_zoom.y);
     world->offset.x += before_zoom.x - after_zoom.x;
     world->offset.y += before_zoom.y - after_zoom.y;
 
-    screen_to_worldf(world, events->cursor_screen.x, events->cursor_screen.y, &events->cursor_world.x, &events->cursor_world.y);
+    screen_to_worldd(world, events->cursor_screen.x, events->cursor_screen.y, &events->cursor_world.x, &events->cursor_world.y);
 }
